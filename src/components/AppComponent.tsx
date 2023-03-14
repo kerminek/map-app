@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import MapComponent from "./MapComponent";
 import { calcRealDistance } from "../utils/calcRealDistance";
 import TileNode from "../utils/TileNode";
+import TestMapComponent from "./TestMapComponent";
 
 type Props = {};
 const mapWidth = 200;
@@ -74,7 +75,8 @@ const AppComponent = (props: Props) => {
           Generating...
         </div>
       ) : (
-        <MapComponent gameData={gameData} mapHeight={mapHeight} mapWidth={mapWidth} />
+        // <MapComponent gameData={gameData} mapHeight={mapHeight} mapWidth={mapWidth} />
+        <TestMapComponent gameData={gameData} mapHeight={mapHeight} mapWidth={mapWidth} />
       )}
       <div className="flex items-center gap-2">
         <p className="font-semibold italic">Seed:</p>
