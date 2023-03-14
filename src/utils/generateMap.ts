@@ -44,7 +44,6 @@ export const generateMap = ({
       mapObject: cachedMap.mapObject,
     };
   }
-  mapHeight;
   let mapObject: TileNode[] = [];
   // @ts-ignore
   const myrng1 = new Math.seedrandom(seed);
@@ -58,7 +57,7 @@ export const generateMap = ({
 
   mapSmoothing(mapObject, smoothingNumber, { mapHeight, mapWidth });
 
-  processRegions(mapObject, mapWidth, mapHeight);
+  // processRegions(mapObject, mapWidth, mapHeight);
   //
   let start = generateFreeTileId(mapObject);
   let end = generateFreeTileId(mapObject);
@@ -72,9 +71,7 @@ export const generateMap = ({
   return { start, end, mapObject };
 };
 
-export default generateMap;
-
-const generateFreeTileId = (mapObject: TileNode[]) => {
+export const generateFreeTileId = (mapObject: TileNode[]) => {
   let randomTileId = randomNum(mapObject.length);
 
   while (!mapObject[randomTileId - 1].walkable) {
@@ -84,7 +81,7 @@ const generateFreeTileId = (mapObject: TileNode[]) => {
   return randomTileId;
 };
 
-const mapSmoothing = (
+export const mapSmoothing = (
   mapObject: TileNode[],
   howManyTimes: number,
   mapDimensions: { mapWidth: number; mapHeight: number }

@@ -10,6 +10,8 @@ const mapHeight = 200;
 // const seed = "test";
 // const start = 23;
 // const end = 356;
+let t0: number;
+let t1: number;
 
 const AppComponent = (props: Props) => {
   const [seed, seedSet] = useState<number | string>(Math.random().toString());
@@ -20,17 +22,22 @@ const AppComponent = (props: Props) => {
     isFetching: true,
   });
 
-  const thread: Worker = useMemo(() => new Worker(new URL("../utils/test.ts", import.meta.url)), []);
+  const mainThread: Worker = useMemo(
+    () => new Worker(new URL("../utils/test.ts", import.meta.url), { type: "module" }),
+    []
+  );
 
   useEffect(() => {
     if (window.Worker) {
-      thread.postMessage({ message: "mapGen", payload: { mapWidth, mapHeight, seed } });
+      t0 = performance.now();
+      mainThread.postMessage({ message: "mapGen", payload: { mapWidth, mapHeight, seed } });
 
-      thread.onmessage = (e) => {
-        if (e.data.message !== "mapGenRes") return;
-        console.time("class recreating");
+      mainThread.onmessage = (mainThreadMessage) => {
+        // console.log(mainThreadMessage.data);
+        if (mainThreadMessage.data.message !== "mapGenRes") return;
+        // console.time("class recreating");
         let tempArray = [];
-        e.data.payload.mapObject.forEach((item) =>
+        mainThreadMessage.data.payload.mapObject.forEach((item) =>
           tempArray.push(
             new TileNode({
               _gridX: item.gridX,
@@ -43,22 +50,52 @@ const AppComponent = (props: Props) => {
             })
           )
         );
-        console.timeEnd("class recreating");
-        gameDataSet({ ...e.data.payload, mapObject: tempArray });
+        // console.timeEnd("class recreating");
+        //
+        const threads = [0, 1].map(
+          (_) => new Worker(new URL("../utils/subWorkerTest.ts", import.meta.url), { type: "module" })
+        );
+        let done = 0;
+        threads.forEach((thread) => {
+          thread.onmessage = (e) => {
+            const res = e.data;
+            tempArray.forEach((item, index) => {
+              if (!item.isWater && res[index].isWater) item.isWater = res[index].isWater;
+              if (!item.isSnow && res[index].isSnow) item.isSnow = res[index].isSnow;
+              if (!item.walkable && res[index].walkable) item.walkable = res[index].walkable;
+            });
+            done++;
+            console.log(done);
+
+            if (done === 2) {
+              t1 = performance.now();
+              console.log(`Generating map took: ${t1 - t0} miliseconds.`);
+              gameDataSet({ ...mainThreadMessage.data.payload, mapObject: tempArray });
+            }
+          };
+        });
+        threads.forEach((thread, index) => {
+          thread.postMessage({ mapObject: tempArray, mapWidth, mapHeight, whichProcess: index });
+        });
+        // t1 = performance.now();
+        // console.log(`Generating map took: ${t1 - t0} miliseconds.`);
+
+        // gameDataSet({ ...mainThreadMessage.data.payload, mapObject: tempArray });
       };
-      thread.onerror = (e) => {
+      mainThread.onerror = (e) => {
         console.error(e);
       };
     }
   }, []);
 
   const resetMap = (newSeed?: number | string) => {
+    t0 = performance.now();
     newSeed && newSeed !== seed && gameDataSet((prev) => ({ ...prev, isFetching: true }));
     console.clear();
 
     newSeed && seedSet(newSeed);
 
-    thread.postMessage({ message: "mapGen", payload: { mapWidth, mapHeight, seed: newSeed } });
+    mainThread.postMessage({ message: "mapGen", payload: { mapWidth, mapHeight, seed: newSeed } });
   };
 
   const callCalc = () => {
