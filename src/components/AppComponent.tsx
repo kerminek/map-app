@@ -3,18 +3,27 @@ import MapComponent from "./MapComponent";
 import { calcRealDistance } from "../utils/calcRealDistance";
 import TileNode from "../utils/TileNode";
 import TestMapComponent from "./TestMapComponent";
+import { generateFreeTileId } from "../utils/generateMap";
+import resetMap from "../utils/resetMap";
+import handleMapGenRes from "../utils/handleMapGenRes";
 
 type Props = {};
 const mapWidth = 200;
 const mapHeight = 200;
-// const seed = "test";
-// const start = 23;
-// const end = 356;
 let t0: number;
 let t1: number;
 
+// const startingSeed = Math.random().toString();
+const startingSeed = "0.8965647813329204";
+let multithread = true;
+
 const AppComponent = (props: Props) => {
-  const [seed, seedSet] = useState<number | string>(Math.random().toString());
+  const [loadingTime, loadingTimeSet] = useState<number>(null);
+  const [seed, seedSet] = useState<string>(startingSeed);
+  const [cachedMap, cachedMapSet] = useState({
+    seed: startingSeed,
+    mapObject: [],
+  });
   const [gameData, gameDataSet] = useState<{ start: number; end: number; mapObject: TileNode[]; isFetching: boolean }>({
     start: undefined,
     end: undefined,
@@ -30,57 +39,21 @@ const AppComponent = (props: Props) => {
   useEffect(() => {
     if (window.Worker) {
       t0 = performance.now();
-      mainThread.postMessage({ message: "mapGen", payload: { mapWidth, mapHeight, seed } });
+      mainThread.postMessage({ message: "mapGen", payload: { mapWidth, mapHeight, seed, multithread } });
 
       mainThread.onmessage = (mainThreadMessage) => {
-        // console.log(mainThreadMessage.data);
         if (mainThreadMessage.data.message !== "mapGenRes") return;
-        // console.time("class recreating");
-        let tempArray = [];
-        mainThreadMessage.data.payload.mapObject.forEach((item) =>
-          tempArray.push(
-            new TileNode({
-              _gridX: item.gridX,
-              _gridY: item.gridY,
-              _id: item.id,
-              _isPath: item.isPath,
-              _isSnow: item.isSnow,
-              _isWater: item.isWater,
-              _walkable: item.walkable,
-            })
-          )
-        );
-        // console.timeEnd("class recreating");
-        //
-        const threads = [0, 1].map(
-          (_) => new Worker(new URL("../utils/subWorkerTest.ts", import.meta.url), { type: "module" })
-        );
-        let done = 0;
-        threads.forEach((thread) => {
-          thread.onmessage = (e) => {
-            const res = e.data;
-            tempArray.forEach((item, index) => {
-              if (!item.isWater && res[index].isWater) item.isWater = res[index].isWater;
-              if (!item.isSnow && res[index].isSnow) item.isSnow = res[index].isSnow;
-              if (!item.walkable && res[index].walkable) item.walkable = res[index].walkable;
-            });
-            done++;
-            console.log(done);
-
-            if (done === 2) {
-              t1 = performance.now();
-              console.log(`Generating map took: ${t1 - t0} miliseconds.`);
-              gameDataSet({ ...mainThreadMessage.data.payload, mapObject: tempArray });
-            }
-          };
+        handleMapGenRes({
+          mainThreadMessage,
+          multithread,
+          t0,
+          t1,
+          mapHeight,
+          mapWidth,
+          loadingTimeSet,
+          cachedMapSet,
+          gameDataSet,
         });
-        threads.forEach((thread, index) => {
-          thread.postMessage({ mapObject: tempArray, mapWidth, mapHeight, whichProcess: index });
-        });
-        // t1 = performance.now();
-        // console.log(`Generating map took: ${t1 - t0} miliseconds.`);
-
-        // gameDataSet({ ...mainThreadMessage.data.payload, mapObject: tempArray });
       };
       mainThread.onerror = (e) => {
         console.error(e);
@@ -88,14 +61,12 @@ const AppComponent = (props: Props) => {
     }
   }, []);
 
-  const resetMap = (newSeed?: number | string) => {
-    t0 = performance.now();
-    newSeed && newSeed !== seed && gameDataSet((prev) => ({ ...prev, isFetching: true }));
+  const handleMapReset = (newSeed = seed) => {
     console.clear();
-
-    newSeed && seedSet(newSeed);
-
-    mainThread.postMessage({ message: "mapGen", payload: { mapWidth, mapHeight, seed: newSeed } });
+    t0 = performance.now();
+    resetMap({ newSeed, mapHeight, mapWidth, cachedMap, cachedMapSet, gameDataSet, seedSet, mainThread, multithread });
+    t1 = performance.now();
+    console.log(`Generating map took: ${t1 - t0} miliseconds.`);
   };
 
   const callCalc = () => {
@@ -121,19 +92,20 @@ const AppComponent = (props: Props) => {
         <button
           className="bg-slate-300 font-bold py-1 px-4 rounded"
           onClick={() => {
-            resetMap(seed);
+            handleMapReset(seed);
           }}
         >
           Load
         </button>
       </div>
+      <div>Generating took: {loadingTime && loadingTime.toFixed() + " ms"}</div>
       <div className="">
         <button className="bg-slate-300 font-bold py-2 px-6 rounded" onClick={callCalc} disabled={gameData.isFetching}>
           Calculate Path
         </button>
         <button
           className="bg-slate-300 font-bold py-2 px-6 rounded"
-          onClick={() => resetMap(seed)}
+          onClick={() => handleMapReset(seed)}
           disabled={gameData.isFetching}
         >
           Reset Position
@@ -141,12 +113,13 @@ const AppComponent = (props: Props) => {
         <button
           className="bg-slate-300 font-bold py-2 px-6 rounded"
           onClick={() => {
-            resetMap(Math.random().toString());
+            handleMapReset(Math.random().toString());
           }}
           disabled={gameData.isFetching}
         >
           Generate New Map
         </button>
+        <button onClick={() => (multithread = !multithread)}>Threading</button>
       </div>
     </div>
   );

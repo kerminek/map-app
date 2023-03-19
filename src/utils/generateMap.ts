@@ -6,44 +6,17 @@ import { neighboursConditions } from "./switchConditions";
 const randomFillPercent = 0.495;
 const smoothingNumber = 5;
 
-interface cachedMap {
-  seed: string | number;
-  mapObject: TileNode[];
-}
-let cachedMap: cachedMap = {
-  seed: undefined,
-  mapObject: [],
-};
-
 export const generateMap = ({
   mapWidth = 30,
   mapHeight = 30,
   seed,
+  multithread,
 }: {
   mapWidth?: number;
   mapHeight?: number;
   seed?: string | number;
+  multithread?: boolean;
 }) => {
-  console.time("generating map");
-  if (seed === cachedMap.seed) {
-    cachedMap.mapObject = cachedMap.mapObject.map((cachedTileNode: TileNode) => {
-      const {
-        gridX: _gridX,
-        gridY: _gridY,
-        id: _id,
-        walkable: _walkable,
-        isSnow: _isSnow,
-        isWater: _isWater,
-      } = cachedTileNode;
-      return (cachedTileNode = new TileNode({ _gridX, _gridY, _id, _walkable, _isSnow, _isWater, _isPath: false }));
-    });
-    console.timeEnd("generating map");
-    return {
-      start: generateFreeTileId(cachedMap.mapObject),
-      end: generateFreeTileId(cachedMap.mapObject),
-      mapObject: cachedMap.mapObject,
-    };
-  }
   let mapObject: TileNode[] = [];
   // @ts-ignore
   const myrng1 = new Math.seedrandom(seed);
@@ -55,20 +28,17 @@ export const generateMap = ({
     mapObject.push(newTileNode);
   }
 
-  mapSmoothing(mapObject, smoothingNumber, { mapHeight, mapWidth });
-
-  // processRegions(mapObject, mapWidth, mapHeight);
-  //
-  let start = generateFreeTileId(mapObject);
-  let end = generateFreeTileId(mapObject);
-
-  console.timeEnd("generating map");
-  cachedMap = {
-    seed,
-    mapObject,
-  };
-
-  return { start, end, mapObject };
+  if (multithread) {
+    // console.log("Multi threading");
+    return { mapObject };
+  } else {
+    mapSmoothing(mapObject, smoothingNumber, { mapHeight, mapWidth });
+    // console.log("Single threading");
+    processRegions(mapObject, mapWidth, mapHeight);
+    let start = generateFreeTileId(mapObject);
+    let end = generateFreeTileId(mapObject);
+    return { mapObject, start, end };
+  }
 };
 
 export const generateFreeTileId = (mapObject: TileNode[]) => {
@@ -87,12 +57,14 @@ export const mapSmoothing = (
   mapDimensions: { mapWidth: number; mapHeight: number }
 ) => {
   const { mapWidth, mapHeight } = mapDimensions;
+  const originalMultiplier = howManyTimes;
+  let times = 0;
   while (howManyTimes > 0) {
+    const t0 = performance.now();
     howManyTimes--;
-    let copiedMapObject = [...mapObject];
-    copiedMapObject.forEach((currentTile) => {
+    mapObject.forEach((currentTile) => {
       let neighbourWallTiles = 0;
-      let neighbours = copiedMapObject
+      let neighbours = mapObject
         .slice(
           Math.max(currentTile.id - (mapWidth + 2), 0),
           Math.min(currentTile.id + (mapWidth + 1), mapHeight * mapWidth)
@@ -109,8 +81,73 @@ export const mapSmoothing = (
         currentTile.walkable = true;
       }
     });
-    mapObject = copiedMapObject;
+    times += performance.now() - t0;
   }
+  console.log(`Singlecore map smoothing in ${times} ms | ${times / originalMultiplier} ms per loop`);
+};
+
+export const threadedMapSmoothing = (mapObject: TileNode[], mapDimensions: { mapWidth: number; mapHeight: number }) => {
+  return new Promise((resolve, reject) => {
+    const { mapWidth, mapHeight } = mapDimensions;
+    let allThreads: Worker[] = [];
+    for (let i = navigator.hardwareConcurrency; i > 0; i--) {
+      allThreads.push(new Worker(new URL("./mapSmoothingWorker.ts", import.meta.url), { type: "module" }));
+    }
+
+    let rows: TileNode[][] = [];
+    let currentThread = 0;
+
+    let currentRow = 1;
+    while (currentRow <= mapHeight) {
+      rows.push(mapObject.slice((currentRow - 1) * mapWidth, mapWidth * currentRow));
+      currentRow++;
+    }
+    for (let i = navigator.hardwareConcurrency; i > 0; i--) {
+      allThreads.push(new Worker(new URL(import.meta.url), { type: "module" }));
+    }
+    let lastFetchedRow = 0;
+    // const t0 = performance.now();
+    allThreads[0].postMessage({ message: "rowsData", payload: { rows: [rows[-1], rows[0], rows[1]] } });
+    allThreads.forEach((thread, threadId) => {
+      thread.onmessage = (e) => {
+        const { message } = e.data;
+        switch (message) {
+          case "next":
+            currentThread = (currentThread + 1) % 8;
+            e.data?.payload && (rows[e.data.payload.gridY - 1][e.data.payload.gridX - 1] = e.data.payload);
+            allThreads[currentThread].postMessage({ payload: e.data.payload });
+            break;
+          case "getRows":
+            if (lastFetchedRow >= rows.length - 1) return;
+            lastFetchedRow++;
+            allThreads[threadId].postMessage({
+              message: "rowsData",
+              payload: { rows: [rows[lastFetchedRow - 1], rows[lastFetchedRow], rows[lastFetchedRow + 1]] },
+            });
+            break;
+          case "backToTop":
+            currentThread = 0;
+            e.data?.payload && (rows[e.data.payload.gridY - 1][e.data.payload.gridX - 1] = e.data.payload);
+            allThreads[currentThread].postMessage("");
+            break;
+          case "finish":
+            // console.log(e.data.payload);
+            if (e.data.payload.rowIndex === rows.length - 1) {
+              // console.log(`Whole operation has ended in ${performance.now() - t0} ms!`);
+              resolve("resolved!!");
+            }
+            currentThread = threadId + 1;
+            allThreads[currentThread].postMessage("last streight");
+            break;
+          default:
+            break;
+        }
+      };
+      thread.onerror = (e) => {
+        reject(e);
+      };
+    });
+  });
 };
 
 export const getRegionTiles = (tileNode: TileNode, mapObject: TileNode[], mapWidth: number, mapHeight: number) => {
@@ -157,7 +194,6 @@ export const getRegions = (isWalkable: boolean, mapObject: TileNode[], mapWidth:
       newRegion.forEach((region) => mapFlags.add(region));
     }
   });
-
   return regions;
 };
 

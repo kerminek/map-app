@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import TileNode from "../utils/TileNode";
 
 type Props = {
   mapHeight: number;
@@ -28,9 +29,6 @@ const TestMapComponent = (props: Props) => {
         "grey";
       ctx.fillRect((item.gridX - 1) * 4, (item.gridY - 1) * 4, 4, 4);
     });
-
-    // ctx.rect(4, 4, 20, 20);
-    // ctx.stroke();
   }, [gameData]);
 
   return (

@@ -11,11 +11,9 @@ self.onmessage = (e: MessageEvent) => {
     self.postMessage(res);
   }
 };
-
 //
 //
 //
-
 (function (f, a, c) {
   var s,
     l = 256,
