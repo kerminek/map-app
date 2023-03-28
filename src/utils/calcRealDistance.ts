@@ -1,27 +1,12 @@
+import { gameDataStore, mapPropsStore } from "../store/stores";
 import Heap from "./Heap";
 import TileNode from "./TileNode";
 import retracePath from "./retracePath";
 import { neighboursConditions } from "./switchConditions";
 
-type Props = {
-  gameData: {
-    start: number;
-    end: number;
-    mapObject: TileNode[];
-  };
-  gameDataSet: React.Dispatch<
-    React.SetStateAction<{
-      start: number;
-      end: number;
-      mapObject: TileNode[];
-    }>
-  >;
-  mapHeight: number;
-  mapWidth: number;
-};
-
-export const calcRealDistance = (props: Props) => {
-  const { gameData, gameDataSet, mapHeight, mapWidth } = props;
+export const calcRealDistance = () => {
+  const { mapHeight, mapWidth } = mapPropsStore.get();
+  const gameData = gameDataStore.get();
 
   const startTile = gameData.mapObject[gameData.start - 1];
   const targetTile = gameData.mapObject[gameData.end - 1];
@@ -43,7 +28,7 @@ export const calcRealDistance = (props: Props) => {
 
       const path = retracePath(startTile, targetTile);
       // copiedArray.mapObject.filter((item) => closedSet.has(item)).forEach((item) => (item.wasCalc = true));
-      gameDataSet(copiedArray);
+      gameDataStore.set(copiedArray);
       // console.log(path);
       break;
     }

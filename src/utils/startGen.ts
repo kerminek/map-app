@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { generateMap } from "./generateMap";
 
 self.onmessage = (e: MessageEvent) => {

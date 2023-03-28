@@ -1,19 +1,11 @@
 import { useEffect } from "react";
-import TileNode from "../utils/TileNode";
+import { useStore } from "@nanostores/react";
+import { gameDataStore, mapPropsStore } from "../store/stores";
 
-type Props = {
-  mapHeight: number;
-  mapWidth: number;
-  gameData: {
-    start: number;
-    end: number;
-    mapObject: TileNode[];
-    isFetching: boolean;
-  };
-};
-
-const TestMapComponent = (props: Props) => {
-  const { mapHeight, mapWidth, gameData } = props;
+const TestMapComponent = () => {
+  const mapProps = useStore(mapPropsStore);
+  const gameData = useStore(gameDataStore);
+  const { mapHeight, mapWidth, sharpness = 1 } = mapProps;
 
   useEffect(() => {
     const c: HTMLCanvasElement = document.getElementById("canvasMap") as HTMLCanvasElement;
@@ -27,12 +19,17 @@ const TestMapComponent = (props: Props) => {
         (item.isSnow && "white") ||
         (item.isWater && "blue") ||
         "grey";
-      ctx.fillRect((item.gridX - 1) * 4, (item.gridY - 1) * 4, 4, 4);
+      ctx.fillRect((item.gridX - 1) * sharpness, (item.gridY - 1) * sharpness, sharpness, sharpness);
     });
   }, [gameData]);
 
   return (
-    <canvas height={mapHeight * 4} width={mapWidth * 4} className="border-2 border-black" id="canvasMap">
+    <canvas
+      height={mapHeight * sharpness}
+      width={mapWidth * sharpness}
+      className="border-2 border-black w-[80vmin]"
+      id="canvasMap"
+    >
       TestMapComponent
     </canvas>
   );

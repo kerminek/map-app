@@ -1,69 +1,26 @@
 import TileNode from "./TileNode";
 import { generateFreeTileId } from "./generateMap";
-
-interface cachedMap {
-  seed: string | number;
-  mapObject: TileNode[];
-}
+import newTileGenerator from "./newTileGenerator";
+import { cachedMapStore, gameDataStore, loadingTimeStore, mapPropsStore } from "../store/stores";
 
 interface props {
-  newSeed: string;
-  mapWidth: number;
-  mapHeight: number;
-  cachedMap: cachedMap;
-  cachedMapSet: React.Dispatch<
-    React.SetStateAction<{
-      seed: any;
-      mapObject: any[];
-    }>
-  >;
-  gameDataSet: React.Dispatch<
-    React.SetStateAction<{
-      start: number;
-      end: number;
-      mapObject: TileNode[];
-      isFetching: boolean;
-    }>
-  >;
-  seedSet: React.Dispatch<React.SetStateAction<string | number>>;
   mainThread: Worker;
-  multithread: boolean;
+  newSeed: string;
 }
 
-const resetMap = ({
-  newSeed,
-  mapWidth,
-  mapHeight,
-  cachedMap,
-  cachedMapSet,
-  gameDataSet,
-  seedSet,
-  mainThread,
-  multithread,
-}: props) => {
-  //   console.log(newSeed, cachedMap.seed);
+const resetMap = ({ newSeed, mainThread }: props) => {
+  const mapProps = mapPropsStore.get();
+  const gameData = gameDataStore.get();
+  const cachedMap = cachedMapStore.get();
+  const { mapHeight, mapWidth, multithread, randomFillPercent, smoothingNumber } = mapProps;
+
   if (newSeed === cachedMap.seed) {
     const usedCachedMap = cachedMap.mapObject.map((cachedTileNode: TileNode) => {
-      const {
-        gridX: _gridX,
-        gridY: _gridY,
-        id: _id,
-        walkable: _walkable,
-        isSnow: _isSnow,
-        isWater: _isWater,
-      } = cachedTileNode;
-      return (cachedTileNode = new TileNode({
-        _gridX,
-        _gridY,
-        _id,
-        _walkable,
-        _isSnow,
-        _isWater,
-        _isPath: false,
-      }));
+      cachedTileNode.isPath = false;
+      return newTileGenerator(cachedTileNode);
     });
 
-    gameDataSet({
+    gameDataStore.set({
       start: generateFreeTileId(usedCachedMap),
       end: generateFreeTileId(usedCachedMap),
       mapObject: usedCachedMap,
@@ -71,11 +28,15 @@ const resetMap = ({
     });
     return;
   } else {
-    gameDataSet((prev) => ({ ...prev, isFetching: true }));
-    seedSet(newSeed);
-    cachedMapSet((prev) => ({ ...prev, seed: newSeed }));
+    loadingTimeStore.set({ t0: performance.now(), t1: null });
+    gameDataStore.set({ ...gameData, isFetching: true });
+    mapPropsStore.set({ ...mapProps, seed: newSeed });
+    cachedMapStore.set({ ...cachedMap, seed: newSeed });
 
-    mainThread.postMessage({ message: "mapGen", payload: { mapWidth, mapHeight, seed: newSeed, multithread } });
+    mainThread.postMessage({
+      message: "mapGen",
+      payload: { mapWidth, mapHeight, seed: newSeed, multithread, randomFillPercent, smoothingNumber },
+    });
   }
 };
 export default resetMap;

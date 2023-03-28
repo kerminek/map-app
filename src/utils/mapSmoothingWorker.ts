@@ -1,74 +1,77 @@
-import TileNode from "./TileNode";
 import { neighboursConditions } from "./switchConditions";
 
-let currentRows: TileNode[][] = [];
-let currentRowIndex: number = undefined;
-let currColIndex = 0;
+const requireVal = {
+  forWall: 4,
+  forAir: 4,
+};
 
-const mapWidth = 200;
-const mapHeight = 200;
+let smoothingTimes = undefined;
+let mapWidth = undefined;
+let mapObject = undefined;
+let position = undefined;
 
 self.onmessage = (e: MessageEvent) => {
-  if (e.data.message === "rowsData") {
-    currentRows = e.data.payload.rows;
-    currentRowIndex = currentRows[1][0].gridY - 1;
+  if (e.data.smoothingTimes) smoothingTimes = e.data.smoothingTimes;
+  if (!smoothingTimes) return postMessage({ message: "finished", payload: [] });
+  if (e.data.mapWidth) mapWidth = e.data.mapWidth;
+  if (e.data.mapObject) {
+    mapObject = e.data.mapObject;
+    position = {
+      notStart: mapObject[0].id !== 1,
+      notEnd: mapObject.at(-1).id !== 40000,
+    };
+  } else if (e.data.mapFragment) {
+    mapObject.splice(0, e.data.mapFragment.start.length, ...e.data.mapFragment.start);
+    mapObject.splice(
+      mapObject.length - e.data.mapFragment.end.length,
+      e.data.mapFragment.end.length,
+      ...e.data.mapFragment.end
+    );
   }
-  if (!currentRows.length) {
-    getRowsData(e);
-    return;
-  }
-  if (currColIndex > currentRows[1]?.length - 1) {
-    if (currentRowIndex + 8 >= mapHeight) {
-      self.postMessage({ message: "finish", payload: { rowIndex: currentRowIndex } });
-      return;
+
+  let changedObjects = new Set();
+
+  let mapObjectCopy = mapObject.slice(
+    position.notStart ? mapWidth : 0,
+    mapObject.length - (position.notEnd ? mapWidth : 0)
+  );
+
+  smoothingTimes--;
+  mapObjectCopy.forEach((currentTile, index) => {
+    let neighbourWallTiles = 0;
+    let neighbours = getNeighbours(index + (position.notStart ? mapWidth : 0), mapObject, mapWidth);
+
+    neighbours = neighbours.filter((item) => neighboursConditions(currentTile, item, false));
+    neighbours.forEach((neighbour) => {
+      if (neighbour.walkable === false) neighbourWallTiles++;
+    });
+
+    if (neighbourWallTiles > requireVal.forWall) {
+      currentTile.walkable = false;
+    } else if (neighbourWallTiles < requireVal.forWall) {
+      currentTile.walkable = true;
     }
-    getRowsData();
-    return;
-  }
-  if (e.data.payload?.id) {
-    if (currentRows[0]) {
-      currentRows[0][currColIndex + 2] = e.data.payload;
-    }
-  }
-  // doing something important here...
-  const currentTile = smoothingFunction();
-  //
-
-  if (currColIndex < currentRows[1]?.length) {
-    currColIndex++;
-    if (currentRowIndex <= 7 && currColIndex <= 2) {
-      self.postMessage({ message: "backToTop", payload: currentTile });
-      return;
-    }
-    self.postMessage({ message: "next", payload: currentTile });
-  }
-};
-
-//
-
-const getRowsData = (e?: MessageEvent) => {
-  self.postMessage({ message: "getRows" });
-  currColIndex = 0;
-};
-
-const smoothingFunction = () => {
-  let currentTile = currentRows[1][currColIndex];
-  let neighbourWallTiles = 0;
-  let neighbours = currentRows.filter((item) => item).flat();
-  const tileIndex = neighbours.findIndex((item) => item.id === currentTile.id);
-  neighbours = neighbours
-    .slice(Math.max(tileIndex - (mapWidth + 1), 0), Math.min(tileIndex + (mapWidth + 1), 3 * mapWidth))
-    .filter((item) => neighboursConditions(currentTile, item, false));
-
-  neighbours.forEach((neighbour) => {
-    if (neighbour.walkable === false) neighbourWallTiles++;
+    changedObjects.add(currentTile);
   });
 
-  if (neighbourWallTiles > 4) {
-    currentTile.walkable = false;
-  } else if (neighbourWallTiles < 4) {
-    currentTile.walkable = true;
-  }
+  if (smoothingTimes === 0) {
+    return postMessage({ payload: changedObjects, message: "finished" });
+  } else {
+    let objToSend = mapObjectCopy.slice(0, mapWidth);
+    objToSend = [...objToSend, ...mapObjectCopy.slice(mapObjectCopy.length - mapWidth)];
 
-  return currentTile;
+    return postMessage({ payload: objToSend, message: "next" });
+  }
+};
+
+const getNeighbours = (index, mapObject, mapWidth) => {
+  let neighs = [];
+  for (let x = -1; x <= 1; x++) {
+    for (let y = -1; y <= 1; y++) {
+      const inx = index + mapWidth * x + 1 * y;
+      const item = mapObject[inx];
+      item && neighs.push(item);
+    }
+  }
+  return neighs;
 };

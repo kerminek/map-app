@@ -1,21 +1,23 @@
 import TileNode from "./TileNode";
 import calcPosition from "./calcPos";
+import newTileGenerator from "./newTileGenerator";
 import randomNum from "./randomNum";
 import { neighboursConditions } from "./switchConditions";
 
-const randomFillPercent = 0.495;
-const smoothingNumber = 5;
-
 export const generateMap = ({
-  mapWidth = 30,
-  mapHeight = 30,
+  mapWidth,
+  mapHeight,
   seed,
   multithread,
+  randomFillPercent,
+  smoothingNumber,
 }: {
   mapWidth?: number;
   mapHeight?: number;
   seed?: string | number;
   multithread?: boolean;
+  randomFillPercent?: number;
+  smoothingNumber?: number;
 }) => {
   let mapObject: TileNode[] = [];
   // @ts-ignore
@@ -24,16 +26,18 @@ export const generateMap = ({
   for (let i = 1; i <= mapWidth * mapHeight; i++) {
     const { col: _gridX, row: _gridY } = calcPosition(i, mapWidth);
     const newTileNode = new TileNode({ _gridX, _gridY, _id: i });
-    if (myrng1.quick() < randomFillPercent) newTileNode.walkable = false;
+    if (myrng1.quick() < randomFillPercent) {
+      newTileNode.walkable = false;
+    } else {
+      newTileNode.walkable = true;
+    }
     mapObject.push(newTileNode);
   }
 
   if (multithread) {
-    // console.log("Multi threading");
     return { mapObject };
   } else {
     mapSmoothing(mapObject, smoothingNumber, { mapHeight, mapWidth });
-    // console.log("Single threading");
     processRegions(mapObject, mapWidth, mapHeight);
     let start = generateFreeTileId(mapObject);
     let end = generateFreeTileId(mapObject);
@@ -86,67 +90,79 @@ export const mapSmoothing = (
   console.log(`Singlecore map smoothing in ${times} ms | ${times / originalMultiplier} ms per loop`);
 };
 
-export const threadedMapSmoothing = (mapObject: TileNode[], mapDimensions: { mapWidth: number; mapHeight: number }) => {
+export const threadedMapSmoothing = (
+  mapObject: TileNode[],
+  smoothingNumber: number,
+  mapDimensions: { mapWidth: number; mapHeight: number }
+) => {
   return new Promise((resolve, reject) => {
     const { mapWidth, mapHeight } = mapDimensions;
     let allThreads: Worker[] = [];
-    for (let i = navigator.hardwareConcurrency; i > 0; i--) {
-      allThreads.push(new Worker(new URL("./mapSmoothingWorker.ts", import.meta.url), { type: "module" }));
-    }
+    for (let i = 0; i < navigator.hardwareConcurrency; i++) {
+      let worker = new Worker(new URL("./mapSmoothingWorker.ts", import.meta.url), { type: "module" });
+      // @ts-ignore
+      worker.start = Math.max(Math.floor((mapHeight / navigator.hardwareConcurrency) * i) - 1, 0);
+      // @ts-ignore
+      worker.end = Math.min(Math.floor((mapHeight / navigator.hardwareConcurrency) * (i + 1)) + 1, mapWidth);
 
-    let rows: TileNode[][] = [];
-    let currentThread = 0;
-
-    let currentRow = 1;
-    while (currentRow <= mapHeight) {
-      rows.push(mapObject.slice((currentRow - 1) * mapWidth, mapWidth * currentRow));
-      currentRow++;
+      allThreads.push(worker);
+      worker.postMessage({
+        // @ts-expect-error
+        mapObject: mapObject.slice(worker.start * mapWidth, worker.end * mapWidth),
+        smoothingTimes: smoothingNumber,
+        mapWidth,
+      });
     }
-    for (let i = navigator.hardwareConcurrency; i > 0; i--) {
-      allThreads.push(new Worker(new URL(import.meta.url), { type: "module" }));
-    }
-    let lastFetchedRow = 0;
-    // const t0 = performance.now();
-    allThreads[0].postMessage({ message: "rowsData", payload: { rows: [rows[-1], rows[0], rows[1]] } });
-    allThreads.forEach((thread, threadId) => {
-      thread.onmessage = (e) => {
-        const { message } = e.data;
-        switch (message) {
-          case "next":
-            currentThread = (currentThread + 1) % 8;
-            e.data?.payload && (rows[e.data.payload.gridY - 1][e.data.payload.gridX - 1] = e.data.payload);
-            allThreads[currentThread].postMessage({ payload: e.data.payload });
-            break;
-          case "getRows":
-            if (lastFetchedRow >= rows.length - 1) return;
-            lastFetchedRow++;
-            allThreads[threadId].postMessage({
-              message: "rowsData",
-              payload: { rows: [rows[lastFetchedRow - 1], rows[lastFetchedRow], rows[lastFetchedRow + 1]] },
-            });
-            break;
-          case "backToTop":
-            currentThread = 0;
-            e.data?.payload && (rows[e.data.payload.gridY - 1][e.data.payload.gridX - 1] = e.data.payload);
-            allThreads[currentThread].postMessage("");
-            break;
-          case "finish":
-            // console.log(e.data.payload);
-            if (e.data.payload.rowIndex === rows.length - 1) {
-              // console.log(`Whole operation has ended in ${performance.now() - t0} ms!`);
-              resolve("resolved!!");
+    let noThreadsRes = 0;
+    Promise.all(
+      allThreads.map((thread) => {
+        return new Promise((resolve) => {
+          thread.onmessage = (e) => {
+            if (e.data.message === "next") {
+              e.data.payload.forEach((item) => {
+                mapObject[item.id - 1] = item;
+              });
+              noThreadsRes++;
+              if (noThreadsRes === allThreads.length) {
+                noThreadsRes = 0;
+                allThreads.forEach((worker) => {
+                  // @ts-expect-error
+                  let mapFragmentStart = mapObject.slice(worker.start * mapWidth, (worker.start + 1) * mapWidth);
+                  // @ts-expect-error
+                  let mapFragmentEnd = mapObject.slice((worker.end - 1) * mapWidth, worker.end * mapWidth);
+                  const mapFragment = {
+                    start: mapFragmentStart,
+                    end: mapFragmentEnd,
+                  };
+                  worker.postMessage({
+                    mapFragment,
+                    message: "mapFragment",
+                  });
+                });
+              }
+            } else if (e.data.message === "finished") {
+              const t0 = performance.now();
+              e.data.payload.forEach((item) => {
+                mapObject[item.id - 1] = newTileGenerator(item);
+              });
+              resolve("success");
+              console.log(`setting array to send took ${performance.now() - t0} ms`);
             }
-            currentThread = threadId + 1;
-            allThreads[currentThread].postMessage("last streight");
-            break;
-          default:
-            break;
-        }
-      };
-      thread.onerror = (e) => {
+          };
+          thread.onerror = (e) => {
+            reject(e);
+          };
+        });
+      })
+    )
+      .then(() => {
+        resolve("success");
+        allThreads.forEach((thread) => thread.terminate());
+      })
+      .catch((e) => {
+        console.error(e);
         reject(e);
-      };
-    });
+      });
   });
 };
 
