@@ -27,7 +27,7 @@ export const calcRealDistance = () => {
       console.log("we found it!");
 
       const path = retracePath(startTile, targetTile);
-      // copiedArray.mapObject.filter((item) => closedSet.has(item)).forEach((item) => (item.wasCalc = true));
+
       gameDataStore.set(copiedArray);
       // console.log(path);
       break;

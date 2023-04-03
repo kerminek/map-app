@@ -7,7 +7,7 @@ type Props = {
   mainThreadMessage: MessageEvent<any>;
 };
 
-const mapProcessingThread = new Worker(new URL("./subWorkerTest.ts", import.meta.url), { type: "module" });
+const mapProcessingThread = new Worker(new URL("./mapProcessingWorker.ts", import.meta.url), { type: "module" });
 
 const handleMapGenRes = async (props: Props) => {
   let { mainThreadMessage } = props;
