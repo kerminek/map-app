@@ -1,9 +1,10 @@
 import { useEffect } from "react";
-import { loadingTimeStore, mapPropsStore } from "../store/stores";
+import { loadingTimeStore, mainThreadStore, mapPropsStore } from "../store/stores";
 import handleMapGenRes from "./handleMapGenRes";
 
-export const handleMainThread = (mainThread: Worker) => {
+export const handleMainThread = () => {
   const mapProps = mapPropsStore.get();
+  const mainThread = mainThreadStore.get();
 
   useEffect(() => {
     if (window.Worker) {

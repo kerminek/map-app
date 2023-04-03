@@ -235,19 +235,29 @@ export const processRegions = (mapObject: TileNode[], mapWidth: number, mapHeigh
   //
   whichRegion = true;
   const freeRegions = getRegions(whichRegion, mapObject, mapWidth, mapHeight);
-  const freeThreshold = Math.max(5, mapWidth / 2);
-  const secondFreeThreshold = freeThreshold * 4;
+  // const freeThreshold = Math.max(5, mapWidth / 2);
+  // const secondFreeThreshold = freeThreshold * 4;
 
-  freeRegions.forEach((region) => {
-    if (region.length < freeThreshold) {
-      region.forEach((tileNode) => {
-        tileNode.walkable = false;
-      });
-    } else if (region.length < secondFreeThreshold) {
-      region.forEach((tileNode) => {
-        tileNode.isSnow = true;
-        tileNode.walkable = false;
-      });
-    }
+  let sorted = freeRegions.sort((a, b) => b.length - a.length);
+  sorted.splice(0, 1);
+
+  sorted.forEach((region) => {
+    region.forEach((tileNode) => {
+      tileNode.isSnow = true;
+      tileNode.walkable = false;
+    });
   });
+
+  // freeRegions.forEach((region) => {
+  //   if (region.length < freeThreshold) {
+  //     region.forEach((tileNode) => {
+  //       tileNode.walkable = false;
+  //     });
+  //   } else if (region.length < secondFreeThreshold) {
+  //     region.forEach((tileNode) => {
+  //       tileNode.isSnow = true;
+  //       tileNode.walkable = false;
+  //     });
+  //   }
+  // });
 };

@@ -1,11 +1,13 @@
 import { cachedMapStore, gameDataStore, loadingTimeStore, mapPropsStore } from "../store/stores";
 import TileNode from "./TileNode";
-import { generateFreeTileId, threadedMapSmoothing } from "./generateMap";
+import { threadedMapSmoothing } from "./generateMap";
 import newTileGenerator from "./newTileGenerator";
 
 type Props = {
   mainThreadMessage: MessageEvent<any>;
 };
+
+const mapProcessingThread = new Worker(new URL("./subWorkerTest.ts", import.meta.url), { type: "module" });
 
 const handleMapGenRes = async (props: Props) => {
   let { mainThreadMessage } = props;
@@ -21,42 +23,18 @@ const handleMapGenRes = async (props: Props) => {
   } else {
     await threadedMapSmoothing(tempArray, smoothingNumber, { mapHeight, mapWidth });
 
-    const mapProcessingThreads = [0, 1].map(
-      (_) => new Worker(new URL("../utils/subWorkerTest.ts", import.meta.url), { type: "module" })
-    );
+    mapProcessingThread.postMessage({ mapObject: tempArray, mapWidth, mapHeight });
+    mapProcessingThread.onmessage = (e) => {
+      let { mapObject, start, end } = e.data;
+      mapObject = mapObject.map((item) => newTileGenerator(item));
 
-    let done = 0;
-    let processedTilesSet = new Set<TileNode>();
-    mapProcessingThreads.forEach((thread) => {
-      thread.onmessage = (e) => {
-        const res = e.data.processedTiles as TileNode[];
-
-        res.forEach((item) => processedTilesSet.add(item));
-        done++;
-
-        if (done === mapProcessingThreads.length) {
-          processedTilesSet.forEach((tile) => {
-            let oldTile = tempArray[tile.id - 1];
-            oldTile.walkable = tile.walkable;
-            oldTile.isSnow = tile.isSnow;
-            oldTile.isWater = tile.isWater;
-          });
-
-          const start = generateFreeTileId(tempArray);
-          const end = generateFreeTileId(tempArray);
-
-          loadingTimeStore.set({ ...loadingTimeStore.get(), t1: performance.now() });
-          gameDataStore.set({ ...mainThreadMessage.data.payload, mapObject: tempArray, start, end });
-          cachedMapStore.set({
-            ...cachedMapStore.get(),
-            mapObject: tempArray,
-          });
-        }
-      };
-    });
-    mapProcessingThreads.forEach((thread, index) => {
-      thread.postMessage({ mapObject: tempArray, mapWidth, mapHeight, whichProcess: index });
-    });
+      loadingTimeStore.set({ ...loadingTimeStore.get(), t1: performance.now() });
+      gameDataStore.set({ ...mainThreadMessage.data.payload, mapObject, start, end });
+      cachedMapStore.set({
+        ...cachedMapStore.get(),
+        mapObject,
+      });
+    };
   }
 };
 

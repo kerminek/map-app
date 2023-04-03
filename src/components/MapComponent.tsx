@@ -1,43 +1,37 @@
-import TileNode from "../utils/TileNode";
+import { useEffect } from "react";
+import { useStore } from "@nanostores/react";
+import { gameDataStore, mapPropsStore } from "../store/stores";
 
-type Props = {
-  gameData: {
-    start: number;
-    end: number;
-    mapObject: TileNode[];
-  };
-  mapHeight: number;
-  mapWidth: number;
-};
+const MapComponent = () => {
+  const mapProps = useStore(mapPropsStore);
+  const gameData = useStore(gameDataStore);
+  const { mapHeight, mapWidth, sharpness = 1 } = mapProps;
 
-const MapComponent = (props: Props) => {
-  const { gameData, mapHeight, mapWidth } = props;
+  useEffect(() => {
+    const c: HTMLCanvasElement = document.getElementById("canvasMap") as HTMLCanvasElement;
+    const ctx = c.getContext("2d");
+    gameData.mapObject.forEach((item) => {
+      ctx.fillStyle =
+        (item.id === gameData.start && "red") ||
+        (item.id === gameData.end && "blue") ||
+        (item.isPath && "#9b7653") ||
+        (item.walkable && "green") ||
+        (item.isSnow && "#336600") ||
+        (item.isWater && "blue") ||
+        "darkgreen";
+      ctx.fillRect((item.gridX - 1) * sharpness, (item.gridY - 1) * sharpness, sharpness, sharpness);
+    });
+  }, [gameData, mapProps]);
 
   return (
-    <div
-      className="grid text-center border-2 border-black"
-      style={{ gridTemplateColumns: `repeat(${mapHeight}, minmax(0, 1fr))` }}
+    <canvas
+      height={mapHeight * sharpness}
+      width={mapWidth * sharpness}
+      className="border-2 border-black w-[100vmin] h-[100vmin]"
+      id="canvasMap"
     >
-      {gameData.mapObject.map((item, key) => (
-        <div
-          className={`h-1 w-1
-            ${
-              (item.id === gameData.start && "bg-red-500 animate-pulse") ||
-              (item.id === gameData.end && "bg-cyan-400 animate-pulse") ||
-              (item.isSnow && "bg-neutral-100") ||
-              (item.isWater && "bg-sky-600") ||
-              (!item.walkable && "bg-stone-400") ||
-              (item.isPath && "bg-orange-500") ||
-              // @ts-expect-error
-              (item.wasCalc && "bg-red-800") ||
-              "bg-green-700/75"
-            }
-            `}
-          key={item.id}
-          // onClick={() => console.log(item)}
-        />
-      ))}
-    </div>
+      MapComponent
+    </canvas>
   );
 };
 

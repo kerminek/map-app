@@ -1,12 +1,12 @@
 import { useStore } from "@nanostores/react";
 import { gameDataStore } from "../store/stores";
 
-const CustomButton = ({ onClick, children }) => {
+const CustomButton = ({ onClick, styles = "", children }) => {
   const gameData = useStore(gameDataStore);
 
   return (
     <button
-      className="bg-slate-300 font-bold py-2 px-5 rounded flex-1 max-w-fit"
+      className={`bg-[green] text-orange-500 font-bold rounded-lg flex-1 whitespace-nowrap py-2 px-5 ${styles}`}
       disabled={gameData.isFetching}
       onClick={onClick}
     >

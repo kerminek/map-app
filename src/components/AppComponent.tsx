@@ -1,4 +1,4 @@
-import TestMapComponent from "./TestMapComponent";
+import MapComponent from "./MapComponent";
 import ControlerComponent from "./ControlerComponent";
 import { useStore } from "@nanostores/react";
 import { gameDataStore } from "../store/stores";
@@ -7,15 +7,15 @@ const AppComponent = () => {
   const gameData = useStore(gameDataStore);
 
   return (
-    <div className="min-h-screen flex items-center justify-evenly flex-wrap">
+    <div className="flex content-start justify-center flex-wrap gap-4">
       {gameData.isFetching ? (
-        <div className="border-2 border-black bg-[green] w-[80vmin] h-[80vmin] flex items-center justify-center">
+        <div className="border-2 border-black bg-[green] w-[100vmin] h-[100vmin] flex items-center justify-center">
           <span id="testId" className="text-xl font-bold animate-pulse">
             Generating ...
           </span>
         </div>
       ) : (
-        <TestMapComponent />
+        <MapComponent />
       )}
       <ControlerComponent />
     </div>

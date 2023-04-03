@@ -1,17 +1,18 @@
 import TileNode from "./TileNode";
 import { generateFreeTileId } from "./generateMap";
 import newTileGenerator from "./newTileGenerator";
-import { cachedMapStore, gameDataStore, loadingTimeStore, mapPropsStore } from "../store/stores";
+import { cachedMapStore, gameDataStore, loadingTimeStore, mainThreadStore, mapPropsStore } from "../store/stores";
 
-interface props {
-  mainThread: Worker;
-  newSeed: string;
-}
+let oldSeed: string;
 
-const resetMap = ({ newSeed, mainThread }: props) => {
+const resetMap = (newSeed = oldSeed) => {
+  console.clear();
+  oldSeed = newSeed;
+
   const mapProps = mapPropsStore.get();
   const gameData = gameDataStore.get();
   const cachedMap = cachedMapStore.get();
+  const mainThread = mainThreadStore.get();
   const { mapHeight, mapWidth, multithread, randomFillPercent, smoothingNumber } = mapProps;
 
   if (newSeed === cachedMap.seed) {
