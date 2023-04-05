@@ -9,5 +9,5 @@ import react from "@astrojs/react";
 // https://astro.build/config
 export default defineConfig({
   integrations: [tailwind(), react()],
-  site: "https://www.jakubkrwawicz.pl/portfolio-apps/map-app",
+  build: { site: "https://www.jakubkrwawicz.pl/portfolio-apps/map-app" },
 });
