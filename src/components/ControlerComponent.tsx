@@ -44,7 +44,7 @@ const ControlerComponent = () => {
       </div>
       {/* Bottom Section */}
       <div className="flex flex-wrap gap-2 w-full">
-        <CustomButton onClick={calcRealDistance}>Calculate Path</CustomButton>
+        <CustomButton onClick={calcRealDistance}>Find Path</CustomButton>
         <CustomButton onClick={() => resetMap(seed)}>Reset Position</CustomButton>
         <CustomButton onClick={() => resetMap(Math.random().toFixed(16))}>Generate New Map</CustomButton>
       </div>
